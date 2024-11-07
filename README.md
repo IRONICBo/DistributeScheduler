@@ -18,3 +18,45 @@ Notes:
 ### Design
 
 [Distribute Scheduler Design](Design.md)
+
+### Test
+
+1. Create 2 workers in kind cluster, one is on-demand, and the other is spot.
+
+```shell
+kind create cluster --config kind-config.yaml
+kubectl label nodes kind-worker node.kubernetes.io/capacity=on-demand
+kubectl label nodes kind-worker2 node.kubernetes.io/capacity=spot
+```
+
+![](./images/nodetype.png)
+
+2. Generate tls certs for the webhook server.
+
+```shell
+cd hack
+bash gen-certs.sh
+```
+
+Copy the result to the `hack/webhook-deployment.yaml` caBundle field.
+
+3. Deploy the webhook server.
+
+```shell
+make build
+docker pull docker.io/asklv/distribute-scheduler-e4d5f4c5df1f67132b3b0814894cf55d:latest
+kind load docker-image docker.io/asklv/distribute-scheduler-e4d5f4c5df1f67132b3b0814894cf55d:latest
+```
+
+apply configs.
+
+```bash
+kubectl apply -f webhook-deployment.yaml
+kubectl apply -f caddy-deployment.yaml
+```
+
+4. Result
+
+![](./images/all-on-demand.png)
+![](./images/all-spot.png)
+![](./images/partial-on-demand.png)

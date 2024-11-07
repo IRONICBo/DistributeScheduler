@@ -6,7 +6,7 @@ metadata:
   labels:
     app: caddy
     cloudpilot.ai/webhook-scheduler: "true"
-    cloudpilot.ai/webhook-scheduler-max-on-demand-count: "0"
+    cloudpilot.ai/webhook-scheduler-max-on-demand-count: "1"
 spec:
   replicas: 5
   selector:
