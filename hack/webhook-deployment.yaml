@@ -1,0 +1,89 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pod-watcher-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pod-watcher-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: cloudpilot
+roleRef:
+  kind: ClusterRole
+  name: pod-watcher-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-server
+  namespace: cloudpilot
+  labels:
+    app: webhook-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-server
+  template:
+    metadata:
+      labels:
+        app: webhook-server
+    spec:
+      containers:
+      - name: server
+        image: docker.io/asklv/distribute-scheduler-e4d5f4c5df1f67132b3b0814894cf55d:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8443
+          name: webhook-api
+        volumeMounts:
+        - name: webhook-tls-certs
+          mountPath: /tmp/webhook/certs/
+          readOnly: true
+      volumes:
+      - name: webhook-tls-certs
+        secret:
+          secretName: webhook-server-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-server
+  namespace: cloudpilot
+spec:
+  selector:
+    app: webhook-server
+  ports:
+    - port: 443
+      targetPort: webhook-api
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: webhook-server
+  labels:
+    app: webhook-server
+webhooks:
+  - name: webhook-server.cloudpilot.svc
+    sideEffects: None
+    admissionReviewVersions: ["v1", "v1beta1"]
+    clientConfig:
+      service:
+        name: webhook-server
+        namespace: cloudpilot
+        path: "/mutate"
+      # Update CA bundle with the value of the caBundle from the `gen-cert.sh`
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURNVENDQWhtZ0F3SUJBZ0lVSVJUV29aM081QVFDcUxYSEl6YmRGdU9GbjZVd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0tERW1NQ1FHQTFVRUF3d2RkMlZpYUc5dmF5MXpaWEoyWlhJdVkyeHZkV1J3YVd4dmRDNXpkbU13SGhjTgpNalF4TVRBM01UYzFPVFEyV2hjTk1qVXhNVEEzTVRjMU9UUTJXakFvTVNZd0pBWURWUVFEREIxM1pXSm9iMjlyCkxYTmxjblpsY2k1amJHOTFaSEJwYkc5MExuTjJZekNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0MKQVFvQ2dnRUJBS0hxQlZteXpRQmdib2J2Vk0yNTIyaEZBWUx0R0V5c1hFdFFDK0dCZHJCdEVoUGpPYi9vU3hzdgpnZkRkd1plcDQ5MHBSK3lqbEtzSHpDT201M0E2K2lSNjJzSjNySHdKOFB1czQyWjVWSGR6ZUtZb2tWT0FqalFzClNKS3YwR1ZiZzJpa2VXZGNDeVlqTVlnQ01mOWcwbVQ4eUlPQTUyZFZudG1sL0htcFVRaWtNd3d0UVpSVHVEdk0KSDhTa3ZQb1U3UjgzVjAxNzF0L3NneGJlUmxNQmpYNDVIUjVlUU0rQWQ4ZCthSjlVMkg4K01UUG53L0JsQ2pqRgpCTTNyOVhaRlM5RkNYQ2tUUVR3N3M4SDlGRlVGRmdkUVFBd2dyMWxwWGIrNDRKYUorYzZCV0YxQTY5eTJTNFJ0Cm9UTnV2K05iZlZ4VEJHZkRFdG1Jd2RPWXgvSFM3TzBDQXdFQUFhTlRNRkV3SFFZRFZSME9CQllFRlAxWmhobXoKc0VLakU5MTV2aDBqRVc5SEN0V1JNQjhHQTFVZEl3UVlNQmFBRlAxWmhobXpzRUtqRTkxNXZoMGpFVzlIQ3RXUgpNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUJBRkFGck5penBXallVNGNJCmxUbmVyaFRVNDVOY0hsT1dsMkY3UUE1aEJUbWhiYzNoeVhBT1U5aEU4VjZmamJvR0dTOG5oaUNVNmcrVDVkRVQKdHFVR3F3b3k5dFVMa3gxRS9FcWxTWTRReS9JaU1ab2ZjOHJMdTJXeHRJREFyNGR3Mnp2NUxJVGhlRnZoZGd4Two4K0NWRmFkc1phdlR5Rm96R250TFJvK21KMlFxTjB6NTh4SXNSOEdsOGZJcmZraEw3WVVzdkJESXNXSkd1Q2c3CldNbktGV3FpM1Rpb3FQelBuUG9Rc3VseXB5NEhWZzN6Uk96aHY5dmpIaFA0ak5oTnJtMm1qdDd3Y0tGMk5tNDIKaWZGVGhlcDE1elJ3YXV0S3ZSMW5QRzE1dEI2SUpBeTZld2RBY3kwcnE5TDhTcVNueWdHeGttR3JGOVpYRnVldgp4Q3pLUmljPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: ["apps", ""]
+        apiVersions: ["v1"]
+        resources: ["deployments","pods"]

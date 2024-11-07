@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy-deployment
+  namespace: cloudpilot
+  labels:
+    app: caddy
+    cloudpilot.ai/webhook-scheduler: "true"
+    cloudpilot.ai/webhook-scheduler-max-on-demand-count: "0"
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: caddy
+  template:
+    metadata:
+      labels:
+        app: caddy
+        cloudpilot.ai/webhook-scheduler: "true"
+        cloudpilot.ai/webhook-scheduler-max-on-demand-count: "1"
+    spec:
+      containers:
+      - name: caddy-container
+        image: caddy:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
